@@ -2,8 +2,8 @@ package with
 
 import (
 	"fmt"
-	"gihub.com/modfin/strut"
-	"gihub.com/modfin/strut/schema"
+	"github.com/modfin/strut"
+	"github.com/modfin/strut/schema"
 )
 
 func Description(description string) strut.OpConfig {

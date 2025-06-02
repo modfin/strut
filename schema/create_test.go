@@ -1,7 +1,7 @@
 package schema_test
 
 import (
-	"gihub.com/modfin/strut/schema"
+	"github.com/modfin/strut/schema"
 	"reflect"
 	"testing"
 )

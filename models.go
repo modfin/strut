@@ -1,6 +1,6 @@
 package strut
 
-import "gihub.com/modfin/strut/schema"
+import "github.com/modfin/strut/schema"
 
 type Definition struct {
 	OpenAPI    string          `json:"openapi,omitempty" yaml:"openapi,omitempty"`
