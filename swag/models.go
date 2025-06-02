@@ -1,13 +1,13 @@
-package strut
+package swag
 
 import "github.com/modfin/strut/schema"
 
 type Definition struct {
-	OpenAPI    string          `json:"openapi,omitempty" yaml:"openapi,omitempty"`
-	Info       Info            `json:"info,omitempty" yaml:"info,omitempty"`
-	Paths      map[string]Path `json:"paths,omitempty" yaml:"paths,omitempty"`
-	Components *Components     `json:"components,omitempty" yaml:"components,omitempty"`
-	Servers    []Server        `json:"servers,omitempty" yaml:"servers,omitempty"`
+	OpenAPI    string           `json:"openapi,omitempty" yaml:"openapi,omitempty"`
+	Info       Info             `json:"info,omitempty" yaml:"info,omitempty"`
+	Paths      map[string]*Path `json:"paths,omitempty" yaml:"paths,omitempty"`
+	Components *Components      `json:"components,omitempty" yaml:"components,omitempty"`
+	Servers    []Server         `json:"servers,omitempty" yaml:"servers,omitempty"`
 }
 
 type Info struct {
@@ -23,10 +23,10 @@ type Path struct {
 	Parameters []Param `json:"parameters,omitempty" yaml:"parameters,omitempty"`
 
 	Post *Operation `json:"post,omitempty" yaml:"post,omitempty"`
+	Get  *Operation `json:"get,omitempty" yaml:"get,omitempty"`
 
-	//Get    *Operation `json:"get,omitempty" yaml:"get,omitempty"`
-	//Put    *Operation `json:"put,omitempty" yaml:"put,omitempty"`
-	//Delete *Operation `json:"delete,omitempty" yaml:"delete,omitempty"`
+	Put    *Operation `json:"put,omitempty" yaml:"put,omitempty"`
+	Delete *Operation `json:"delete,omitempty" yaml:"delete,omitempty"`
 	//Patch  *Operation `json:"patch,omitempty" yaml:"patch,omitempty"`
 	//Head   *Operation `json:"head,omitempty" yaml:"head,omitempty"`
 }
@@ -67,6 +67,18 @@ type Response struct {
 	Content     map[string]MediaType `json:"content,omitempty" yaml:"content,omitempty"`
 	//Headers     map[string]Header    `json:"headers,omitempty" yaml:"headers,omitempty"`
 	//Links       map[string]Link      `json:"links,omitempty" yaml:"links,omitempty"`
+}
+
+func ResponseOf[T any](description string) *Response {
+	var z T
+	return &Response{
+		Description: description,
+		Content: map[string]MediaType{
+			"application/json": {
+				Schema: schema.From(z),
+			},
+		},
+	}
 }
 
 // MediaType represents a media type object

@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/modfin/strut"
+	"github.com/modfin/strut/swag"
 	"github.com/modfin/strut/with"
 	"github.com/stretchr/testify/assert"
 	"io"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -48,6 +49,11 @@ func GetPerson(ctx context.Context) (res Person, err error) {
 	}, nil
 }
 
+func ImATeapot(ctx context.Context) (res Person, err error) {
+
+	return strut.NewError[Person](ctx, http.StatusTeapot, "im a teapot")
+}
+
 func StartServer(t *testing.T) *http.Server {
 	r := chi.NewRouter()
 
@@ -55,7 +61,7 @@ func StartServer(t *testing.T) *http.Server {
 		w.Write([]byte("pong"))
 	})
 
-	s := strut.New(r).
+	s := strut.New(slog.Default(), r).
 		Title("A Strut API, openapi for agents").
 		Description("A Strut API, openapi for agents implementing demo endpoints").
 		Version("1.0.0").
@@ -71,7 +77,7 @@ func StartServer(t *testing.T) *http.Server {
 
 		with.RequestDescription("User to add age to"),
 		// Since generics is used. The description of the
-		with.ResponseDescription("User with added age"),
+		with.ResponseDescription(200, "User with added age"),
 	)
 
 	strut.Get(s, "/person/{name}", GetPerson,
@@ -80,7 +86,14 @@ func StartServer(t *testing.T) *http.Server {
 		// Query params
 		with.PathParam[string]("name", "User's name"),
 
-		with.ResponseDescription("A person"),
+		with.ResponseDescription(200, "A person"),
+	)
+
+	strut.Get(s, "/im-a-teapot", ImATeapot,
+		with.OperationId("im-a-teapot"),
+		with.Description("Get a teapot person"),
+		with.ResponseDescription(200, "A person"),
+		with.Response(418, swag.ResponseOf[strut.Error]("im a teapot error")),
 	)
 
 	r.Get("/.well-known/openapi.yaml", s.SchemaHandlerYAML)
@@ -200,11 +213,12 @@ func TestFrom_spec_yaml(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text, err := io.ReadAll(y.Body)
+	//text, err := io.ReadAll(y.Body)
+	_, err = io.ReadAll(y.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fmt.Println(string(text))
+	//fmt.Println(string(text))
 
 }

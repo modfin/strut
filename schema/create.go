@@ -7,7 +7,7 @@ import (
 )
 
 // From converts a struct to a JSON using reflection and struct tags
-func From(v interface{}) *JSON {
+func From(v any) *JSON {
 	t := reflect.TypeOf(v)
 	var nullable bool
 	if t.Kind() == reflect.Ptr {

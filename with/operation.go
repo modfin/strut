@@ -4,35 +4,36 @@ import (
 	"fmt"
 	"github.com/modfin/strut"
 	"github.com/modfin/strut/schema"
+	"github.com/modfin/strut/swag"
 )
 
 func Description(description string) strut.OpConfig {
-	return func(op *strut.Operation) {
+	return func(op *swag.Operation) {
 		op.Description = description
 	}
 }
 func OperationId(operationId string) strut.OpConfig {
-	return func(op *strut.Operation) {
+	return func(op *swag.Operation) {
 		op.OperationID = operationId
 	}
 }
 
 func Summary(summary string) strut.OpConfig {
-	return func(op *strut.Operation) {
+	return func(op *swag.Operation) {
 		op.Summary = summary
 	}
 }
 
-func Param(param ...strut.Param) strut.OpConfig {
-	return func(op *strut.Operation) {
+func Param(param ...swag.Param) strut.OpConfig {
+	return func(op *swag.Operation) {
 		op.Parameters = append(op.Parameters, param...)
 	}
 }
 
 func QueryParam[T any](name string, description string) strut.OpConfig {
 	var ref T
-	return func(op *strut.Operation) {
-		op.Parameters = append(op.Parameters, strut.Param{
+	return func(op *swag.Operation) {
+		op.Parameters = append(op.Parameters, swag.Param{
 			Name:        name,
 			In:          "query",
 			Description: description,
@@ -42,8 +43,8 @@ func QueryParam[T any](name string, description string) strut.OpConfig {
 }
 func PathParam[T any](name string, description string) strut.OpConfig {
 	var ref T
-	return func(op *strut.Operation) {
-		op.Parameters = append(op.Parameters, strut.Param{
+	return func(op *swag.Operation) {
+		op.Parameters = append(op.Parameters, swag.Param{
 			Name:        name,
 			In:          "path",
 			Description: description,
@@ -55,8 +56,8 @@ func PathParam[T any](name string, description string) strut.OpConfig {
 
 func CookieParam[T any](name string, description string) strut.OpConfig {
 	var ref T
-	return func(op *strut.Operation) {
-		op.Parameters = append(op.Parameters, strut.Param{
+	return func(op *swag.Operation) {
+		op.Parameters = append(op.Parameters, swag.Param{
 			Name:        name,
 			In:          "cookie",
 			Description: description,
@@ -66,8 +67,8 @@ func CookieParam[T any](name string, description string) strut.OpConfig {
 }
 func HeaderParam[T any](name string, description string) strut.OpConfig {
 	var ref T
-	return func(op *strut.Operation) {
-		op.Parameters = append(op.Parameters, strut.Param{
+	return func(op *swag.Operation) {
+		op.Parameters = append(op.Parameters, swag.Param{
 			Name:        name,
 			In:          "header",
 			Description: description,
@@ -77,49 +78,50 @@ func HeaderParam[T any](name string, description string) strut.OpConfig {
 }
 
 func Deprecated() strut.OpConfig {
-	return func(op *strut.Operation) {
+	return func(op *swag.Operation) {
 		op.Deprecated = true
 	}
 }
 
 func Tags(tags ...string) strut.OpConfig {
-	return func(op *strut.Operation) {
+	return func(op *swag.Operation) {
 		op.Tags = append(op.Tags, tags...)
 	}
 }
 
-func Operation(op *strut.Operation) strut.OpConfig {
-	return func(o *strut.Operation) {
+func Operation(op *swag.Operation) strut.OpConfig {
+	return func(o *swag.Operation) {
 		*o = *op
 	}
 }
 
-func Response(statusCode int, res *strut.Response) strut.OpConfig {
-	return func(op *strut.Operation) {
+func Response(statusCode int, res *swag.Response) strut.OpConfig {
+	return func(op *swag.Operation) {
 		if op.Responses == nil {
-			op.Responses = map[string]*strut.Response{}
+			op.Responses = map[string]*swag.Response{}
 		}
 		op.Responses[fmt.Sprintf("%d", statusCode)] = res
 	}
 }
 
-func ResponseDescription(description string) strut.OpConfig {
-	return func(op *strut.Operation) {
+func ResponseDescription(code int, description string) strut.OpConfig {
+	return func(op *swag.Operation) {
 		if op.Responses == nil {
-			op.Responses = map[string]*strut.Response{}
+			op.Responses = map[string]*swag.Response{}
 		}
 
-		if op.Responses["200"] == nil {
-			op.Responses["200"] = &strut.Response{}
+		statusCode := fmt.Sprintf("%d", code)
+		if op.Responses[statusCode] == nil {
+			op.Responses[statusCode] = &swag.Response{}
 		}
-		op.Responses["200"].Description = description
+		op.Responses[statusCode].Description = description
 	}
 }
 
 func RequestDescription(description string) strut.OpConfig {
-	return func(op *strut.Operation) {
+	return func(op *swag.Operation) {
 		if op.RequestBody == nil {
-			op.RequestBody = &strut.RequestBody{}
+			op.RequestBody = &swag.RequestBody{}
 		}
 		op.RequestBody.Description = description
 	}

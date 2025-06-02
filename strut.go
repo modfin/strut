@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/modfin/strut/schema"
+	"github.com/modfin/strut/swag"
 	"gopkg.in/yaml.v3"
 	"log/slog"
 	"net/http"
@@ -14,14 +15,15 @@ import (
 )
 
 type Strut struct {
-	Definition *Definition
+	Definition *swag.Definition
 	mux        *chi.Mux
+	log        *slog.Logger
 }
 
 func (s *Strut) AddServer(url string, description string) *Strut {
-	s.Definition.Servers = append(s.Definition.Servers, Server{
+	s.Definition.Servers = append(s.Definition.Servers, swag.Server{
 		URL:         url,
-		Description: "the main server",
+		Description: description,
 	})
 	return s
 }
@@ -60,26 +62,24 @@ func (s *Strut) SchemaHandlerJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func New(chi *chi.Mux) *Strut {
+func New(log *slog.Logger, chi *chi.Mux) *Strut {
+
 	return &Strut{
+		log: log,
 		mux: chi,
-		Definition: &Definition{
+		Definition: &swag.Definition{
 			OpenAPI: "3.0.3",
-			Info: Info{
+			Info: swag.Info{
 				Title:       "strut",
 				Description: "strut",
 				Version:     "v0.0.1",
 			},
-			Paths: map[string]Path{},
-			Components: &Components{
+			Paths: map[string]*swag.Path{},
+			Components: &swag.Components{
 				Schemas: map[string]*schema.JSON{},
 			},
 		},
 	}
-}
-
-func HTTPRequest(ctx context.Context) *http.Request {
-	return ctx.Value("http-request").(*http.Request)
 }
 
 func PathParam(ctx context.Context, param string) string {
@@ -91,22 +91,39 @@ func QueryParam(ctx context.Context, param string) string {
 	return r.URL.Query().Get(param)
 }
 
-type OpConfig func(op *Operation)
+func HTTPRequest(ctx context.Context) *http.Request {
+	r := ctx.Value("http-request")
+	if r == nil {
+		return nil
+	}
+	return r.(*http.Request)
+}
+func HTTPResponseWriter(ctx context.Context) http.ResponseWriter {
+	w := ctx.Value("http-response-writer")
+	if w == nil {
+		return nil
+	}
+	return ctx.Value("http-response-writer").(http.ResponseWriter)
+}
 
-func Post[REQ any, RES any](s *Strut, path string,
-	fn func(ctx context.Context, req REQ) (res RES, err error),
-	ops ...OpConfig,
-) {
+func decorateContext(req *http.Request, w http.ResponseWriter) context.Context {
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, "http-request", req)
+	ctx = context.WithValue(ctx, "http-response-writer", w)
+	return ctx
+}
 
-	op := Operation{}
+type OpConfig func(op *swag.Operation)
+
+func assignOperation(ops ...OpConfig) *swag.Operation {
+	op := &swag.Operation{}
 	for _, o := range ops {
-		o(&op)
+		o(op)
 	}
+	return op
+}
 
-	s.Definition.Paths[path] = Path{
-		Post: &op,
-	}
-
+func assignRequest[REQ any](s *Strut, op *swag.Operation) {
 	var req REQ
 	reqSchema := schema.From(req)
 	reqType := reflect.TypeOf(req)
@@ -118,15 +135,16 @@ func Post[REQ any, RES any](s *Strut, path string,
 	s.Definition.Components.Schemas[reqUri] = reqSchema
 
 	if op.RequestBody == nil { // Defaulting stuff...
-		op.RequestBody = &RequestBody{}
+		op.RequestBody = &swag.RequestBody{}
 	}
 	if op.RequestBody.Content == nil {
-		op.RequestBody.Content = map[string]MediaType{}
+		op.RequestBody.Content = map[string]swag.MediaType{}
 	}
-	op.RequestBody.Content["application/json"] = MediaType{
+	op.RequestBody.Content["application/json"] = swag.MediaType{
 		Schema: &schema.JSON{Ref: reqRef},
 	}
-
+}
+func assignResponse[RES any](s *Strut, op *swag.Operation) {
 	var res RES
 	resSchema := schema.From(res)
 
@@ -136,42 +154,69 @@ func Post[REQ any, RES any](s *Strut, path string,
 	resUri := fmt.Sprintf("%s_%s", resPkg, resName)
 	resRef := "#/components/schemas/" + resUri
 	s.Definition.Components.Schemas[resUri] = resSchema
+	if op.Responses == nil {
+		op.Responses = map[string]*swag.Response{}
+	}
 	if op.Responses["200"] == nil {
-		op.Responses["200"] = &Response{}
+		op.Responses["200"] = &swag.Response{}
 	}
 	if op.Responses["200"].Content == nil {
-		op.Responses["200"].Content = map[string]MediaType{}
+		op.Responses["200"].Content = map[string]swag.MediaType{}
 	}
-	op.Responses["200"].Content["application/json"] = MediaType{
+	op.Responses["200"].Content["application/json"] = swag.MediaType{
 		Schema: &schema.JSON{Ref: resRef},
 	}
+}
+
+func getPath(d *swag.Definition, path string) *swag.Path {
+	if d.Paths == nil {
+		d.Paths = map[string]*swag.Path{}
+	}
+	if d.Paths[path] == nil {
+		d.Paths[path] = &swag.Path{}
+	}
+	return d.Paths[path]
+}
+
+func createResponse[RES any](s *Strut, ctx context.Context, res RES) {
+	w := HTTPResponseWriter(ctx)
+	w.Header().Set("Content-Type", "application/json")
+	err := json.NewEncoder(w).Encode(res)
+	if err != nil {
+		s.log.Error("error encoding response", "error", err)
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
+
+}
+
+func Post[REQ any, RES any](s *Strut, path string,
+	fn func(ctx context.Context, req REQ) (res RES, err error),
+	ops ...OpConfig,
+) {
+
+	op := assignOperation(ops...)
+	getPath(s.Definition, path).Post = op
+	assignRequest[REQ](s, op)
+	assignResponse[RES](s, op)
 
 	s.mux.Post(path, func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), "http-request", r)
+		ctx := decorateContext(r, w)
 
 		var req REQ
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
-			// TODO pass error logging to chi middleware?
-			slog.Default().Error("error decoding request", "error", err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			s.log.Error("error decoding request", "error", err)
+			http.Error(w, "could not decode request", http.StatusBadRequest)
 			return
 		}
 
 		res, err := fn(ctx, req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		createResponse(s, ctx, res)
 
-		w.Header().Set("Content-Type", "application/json")
-		err = json.NewEncoder(w).Encode(res)
-		if err != nil {
-			// TODO pass error logging to chi middleware?
-			slog.Default().Error("error encoding response", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 	})
 
 }
@@ -181,51 +226,71 @@ func Get[RES any](s *Strut, path string,
 	ops ...OpConfig,
 ) {
 
-	op := Operation{}
-	for _, o := range ops {
-		o(&op)
-	}
-
-	s.Definition.Paths[path] = Path{
-		Post: &op,
-	}
-
-	var res RES
-	resSchema := schema.From(res)
-
-	resType := reflect.TypeOf(res)
-	resName := resType.Name()
-	resPkg := filepath.Base(resType.PkgPath())
-	resUri := fmt.Sprintf("%s_%s", resPkg, resName)
-	resRef := "#/components/schemas/" + resUri
-	s.Definition.Components.Schemas[resUri] = resSchema
-	if op.Responses["200"] == nil {
-		op.Responses["200"] = &Response{}
-	}
-	if op.Responses["200"].Content == nil {
-		op.Responses["200"].Content = map[string]MediaType{}
-	}
-	op.Responses["200"].Content["application/json"] = MediaType{
-		Schema: &schema.JSON{Ref: resRef},
-	}
+	op := assignOperation(ops...)
+	getPath(s.Definition, path).Get = op
+	assignResponse[RES](s, op)
 
 	s.mux.Get(path, func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), "http-request", r)
+		ctx := decorateContext(r, w)
 
 		res, err := fn(ctx)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		err = json.NewEncoder(w).Encode(res)
-		if err != nil {
-			// TODO pass error logging to chi middleware?
-			slog.Default().Error("error encoding response", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		createResponse(s, ctx, res)
 	})
 
+}
+
+func Put[REQ any, RES any](s *Strut, path string,
+	fn func(ctx context.Context, req REQ) (res RES, err error),
+	ops ...OpConfig,
+) {
+
+	op := assignOperation(ops...)
+	getPath(s.Definition, path).Put = op
+	assignRequest[REQ](s, op)
+	assignResponse[RES](s, op)
+
+	s.mux.Put(path, func(w http.ResponseWriter, r *http.Request) {
+		ctx := decorateContext(r, w)
+
+		var req REQ
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
+
+			s.log.Error("error decoding request", "error", err)
+			http.Error(w, "could not decode request", http.StatusBadRequest)
+			return
+		}
+
+		res, err := fn(ctx, req)
+		if err != nil {
+			return
+		}
+
+		createResponse(s, ctx, res)
+	})
+}
+
+func Delete[RES any](s *Strut, path string,
+	fn func(ctx context.Context) (res RES, err error),
+	ops ...OpConfig,
+) {
+
+	op := assignOperation(ops...)
+	getPath(s.Definition, path).Delete = op
+	assignResponse[RES](s, op)
+
+	s.mux.Delete(path, func(w http.ResponseWriter, r *http.Request) {
+		ctx := decorateContext(r, w)
+
+		res, err := fn(ctx)
+		if err != nil {
+			return
+		}
+
+		createResponse(s, ctx, res)
+	})
 }
