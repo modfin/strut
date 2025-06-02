@@ -1,4 +1,4 @@
-module gihub.com/modfin/strut
+module github.com/modfin/strut
 
 go 1.24
 
