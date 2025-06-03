@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
 	"github.com/modfin/strut"
-	"github.com/modfin/strut/swag"
 	"github.com/modfin/strut/with"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -122,7 +121,7 @@ func setupExtendedTestServer(t *testing.T) (*strut.Strut, *chi.Mux, *httptest.Se
 		with.PathParam[string]("id", "Product ID"),
 		with.RequestDescription("Product fields to update"),
 		with.ResponseDescription(200, "Updated product"),
-		with.Response(404, swag.ResponseOf[strut.Error]("Product not found")),
+		with.Response(404, strut.ResponseOf[strut.Error]("Product not found")),
 	)
 
 	// Add DELETE endpoint for deleting a product
@@ -133,7 +132,7 @@ func setupExtendedTestServer(t *testing.T) (*strut.Strut, *chi.Mux, *httptest.Se
 		with.Tags("products"),
 		with.PathParam[string]("id", "Product ID"),
 		with.ResponseDescription(200, "Deletion result"),
-		with.Response(404, swag.ResponseOf[strut.Error]("Product not found")),
+		with.Response(404, strut.ResponseOf[strut.Error]("Product not found")),
 	)
 
 	r.Get("/.well-known/openapi.yaml", s.SchemaHandlerYAML)

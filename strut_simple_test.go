@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
 	"github.com/modfin/strut"
-	"github.com/modfin/strut/swag"
 	"github.com/modfin/strut/with"
 	"github.com/stretchr/testify/assert"
 	"io"
@@ -93,7 +92,7 @@ func StartServer(t *testing.T) *http.Server {
 		with.OperationId("im-a-teapot"),
 		with.Description("Get a teapot person"),
 		with.ResponseDescription(200, "A person"),
-		with.Response(418, swag.ResponseOf[strut.Error]("im a teapot error")),
+		with.Response(418, strut.ResponseOf[strut.Error]("im a teapot error")),
 	)
 
 	r.Get("/.well-known/openapi.yaml", s.SchemaHandlerYAML)

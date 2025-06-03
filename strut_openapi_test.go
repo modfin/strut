@@ -6,7 +6,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/modfin/strut"
 	"github.com/modfin/strut/schema"
-	"github.com/modfin/strut/swag"
 	"github.com/modfin/strut/with"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -237,7 +236,7 @@ func setupComplexTestServer(t *testing.T) (*strut.Strut, *httptest.Server) {
 		with.Tags("orders"),
 		with.PathParam[string]("id", "Order ID"),
 		with.ResponseDescription(200, "Order details"),
-		with.Response(404, swag.ResponseOf[strut.Error]("Order not found")),
+		with.Response(404, strut.ResponseOf[strut.Error]("Order not found")),
 	)
 
 	strut.Post(s, "/orders", CreateOrder,
@@ -247,7 +246,7 @@ func setupComplexTestServer(t *testing.T) (*strut.Strut, *httptest.Server) {
 		with.Tags("orders"),
 		with.RequestDescription("Order to create"),
 		with.ResponseDescription(200, "Created order"),
-		with.Response(400, swag.ResponseOf[strut.Error]("Invalid order data")),
+		with.Response(400, strut.ResponseOf[strut.Error]("Invalid order data")),
 	)
 
 	strut.Put(s, "/orders/{id}/Status", UpdateOrderStatus,
@@ -258,7 +257,7 @@ func setupComplexTestServer(t *testing.T) (*strut.Strut, *httptest.Server) {
 		with.PathParam[string]("id", "Order ID"),
 		with.RequestDescription("New order Status"),
 		with.ResponseDescription(200, "Updated order"),
-		with.Response(404, swag.ResponseOf[strut.Error]("Order not found")),
+		with.Response(404, strut.ResponseOf[strut.Error]("Order not found")),
 	)
 
 	r.Get("/.well-known/openapi.yaml", s.SchemaHandlerYAML)

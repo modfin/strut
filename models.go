@@ -1,4 +1,4 @@
-package swag
+package strut
 
 import "github.com/modfin/strut/schema"
 

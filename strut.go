@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/modfin/strut/schema"
-	"github.com/modfin/strut/swag"
 	"gopkg.in/yaml.v3"
 	"log/slog"
 	"net/http"
@@ -14,14 +13,21 @@ import (
 	"reflect"
 )
 
+type Mux interface {
+	Post(path string, handler http.HandlerFunc)
+	Get(path string, handler http.HandlerFunc)
+	Put(path string, handler http.HandlerFunc)
+	Delete(path string, handler http.HandlerFunc)
+}
+
 type Strut struct {
-	Definition *swag.Definition
-	mux        *chi.Mux
+	Definition *Definition
+	mux        Mux
 	log        *slog.Logger
 }
 
 func (s *Strut) AddServer(url string, description string) *Strut {
-	s.Definition.Servers = append(s.Definition.Servers, swag.Server{
+	s.Definition.Servers = append(s.Definition.Servers, Server{
 		URL:         url,
 		Description: description,
 	})
@@ -62,26 +68,28 @@ func (s *Strut) SchemaHandlerJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func New(log *slog.Logger, chi *chi.Mux) *Strut {
+func New(log *slog.Logger, mux Mux) *Strut {
 
 	return &Strut{
 		log: log,
-		mux: chi,
-		Definition: &swag.Definition{
+		mux: mux,
+		Definition: &Definition{
 			OpenAPI: "3.0.3",
-			Info: swag.Info{
+			Info: Info{
 				Title:       "strut",
 				Description: "strut",
 				Version:     "v0.0.1",
 			},
-			Paths: map[string]*swag.Path{},
-			Components: &swag.Components{
+			Paths: map[string]*Path{},
+			Components: &Components{
 				Schemas: map[string]*schema.JSON{},
 			},
 		},
 	}
 }
 
+// PathParam returns the value of the path parameter
+// expects that chi is being used
 func PathParam(ctx context.Context, param string) string {
 	return chi.URLParamFromCtx(ctx, param)
 }
@@ -113,17 +121,17 @@ func decorateContext(req *http.Request, w http.ResponseWriter) context.Context {
 	return ctx
 }
 
-type OpConfig func(op *swag.Operation)
+type OpConfig func(op *Operation)
 
-func assignOperation(ops ...OpConfig) *swag.Operation {
-	op := &swag.Operation{}
+func assignOperation(ops ...OpConfig) *Operation {
+	op := &Operation{}
 	for _, o := range ops {
 		o(op)
 	}
 	return op
 }
 
-func assignRequest[REQ any](s *Strut, op *swag.Operation) {
+func assignRequest[REQ any](s *Strut, op *Operation) {
 	var req REQ
 	reqSchema := schema.From(req)
 	reqType := reflect.TypeOf(req)
@@ -135,16 +143,16 @@ func assignRequest[REQ any](s *Strut, op *swag.Operation) {
 	s.Definition.Components.Schemas[reqUri] = reqSchema
 
 	if op.RequestBody == nil { // Defaulting stuff...
-		op.RequestBody = &swag.RequestBody{}
+		op.RequestBody = &RequestBody{}
 	}
 	if op.RequestBody.Content == nil {
-		op.RequestBody.Content = map[string]swag.MediaType{}
+		op.RequestBody.Content = map[string]MediaType{}
 	}
-	op.RequestBody.Content["application/json"] = swag.MediaType{
+	op.RequestBody.Content["application/json"] = MediaType{
 		Schema: &schema.JSON{Ref: reqRef},
 	}
 }
-func assignResponse[RES any](s *Strut, op *swag.Operation) {
+func assignResponse[RES any](s *Strut, op *Operation) {
 	var res RES
 	resSchema := schema.From(res)
 
@@ -155,25 +163,25 @@ func assignResponse[RES any](s *Strut, op *swag.Operation) {
 	resRef := "#/components/schemas/" + resUri
 	s.Definition.Components.Schemas[resUri] = resSchema
 	if op.Responses == nil {
-		op.Responses = map[string]*swag.Response{}
+		op.Responses = map[string]*Response{}
 	}
 	if op.Responses["200"] == nil {
-		op.Responses["200"] = &swag.Response{}
+		op.Responses["200"] = &Response{}
 	}
 	if op.Responses["200"].Content == nil {
-		op.Responses["200"].Content = map[string]swag.MediaType{}
+		op.Responses["200"].Content = map[string]MediaType{}
 	}
-	op.Responses["200"].Content["application/json"] = swag.MediaType{
+	op.Responses["200"].Content["application/json"] = MediaType{
 		Schema: &schema.JSON{Ref: resRef},
 	}
 }
 
-func getPath(d *swag.Definition, path string) *swag.Path {
+func getPath(d *Definition, path string) *Path {
 	if d.Paths == nil {
-		d.Paths = map[string]*swag.Path{}
+		d.Paths = map[string]*Path{}
 	}
 	if d.Paths[path] == nil {
-		d.Paths[path] = &swag.Path{}
+		d.Paths[path] = &Path{}
 	}
 	return d.Paths[path]
 }
@@ -190,8 +198,14 @@ func createResponse[RES any](s *Strut, ctx context.Context, res RES) {
 
 }
 
+// Handler for a GET and DELETE request
+type HandlerOut[RES any] func(ctx context.Context) (res RES, err error)
+
+// Handler for a POST and PUT request
+type HandlerInOut[REQ any, RES any] func(ctx context.Context, req REQ) (res RES, err error)
+
 func Post[REQ any, RES any](s *Strut, path string,
-	fn func(ctx context.Context, req REQ) (res RES, err error),
+	handler HandlerInOut[REQ, RES],
 	ops ...OpConfig,
 ) {
 
@@ -211,7 +225,7 @@ func Post[REQ any, RES any](s *Strut, path string,
 			return
 		}
 
-		res, err := fn(ctx, req)
+		res, err := handler(ctx, req)
 		if err != nil {
 			return
 		}
@@ -222,7 +236,7 @@ func Post[REQ any, RES any](s *Strut, path string,
 }
 
 func Get[RES any](s *Strut, path string,
-	fn func(ctx context.Context) (res RES, err error),
+	handler HandlerOut[RES],
 	ops ...OpConfig,
 ) {
 
@@ -233,7 +247,7 @@ func Get[RES any](s *Strut, path string,
 	s.mux.Get(path, func(w http.ResponseWriter, r *http.Request) {
 		ctx := decorateContext(r, w)
 
-		res, err := fn(ctx)
+		res, err := handler(ctx)
 		if err != nil {
 			return
 		}
@@ -244,7 +258,7 @@ func Get[RES any](s *Strut, path string,
 }
 
 func Put[REQ any, RES any](s *Strut, path string,
-	fn func(ctx context.Context, req REQ) (res RES, err error),
+	handler HandlerInOut[REQ, RES],
 	ops ...OpConfig,
 ) {
 
@@ -265,7 +279,7 @@ func Put[REQ any, RES any](s *Strut, path string,
 			return
 		}
 
-		res, err := fn(ctx, req)
+		res, err := handler(ctx, req)
 		if err != nil {
 			return
 		}
@@ -275,7 +289,7 @@ func Put[REQ any, RES any](s *Strut, path string,
 }
 
 func Delete[RES any](s *Strut, path string,
-	fn func(ctx context.Context) (res RES, err error),
+	handler HandlerOut[RES],
 	ops ...OpConfig,
 ) {
 
@@ -286,7 +300,7 @@ func Delete[RES any](s *Strut, path string,
 	s.mux.Delete(path, func(w http.ResponseWriter, r *http.Request) {
 		ctx := decorateContext(r, w)
 
-		res, err := fn(ctx)
+		res, err := handler(ctx)
 		if err != nil {
 			return
 		}

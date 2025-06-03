@@ -8,7 +8,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/modfin/strut"
 	"github.com/modfin/strut/schema"
-	"github.com/modfin/strut/swag"
 	"github.com/modfin/strut/with"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -141,29 +140,6 @@ func SearchProducts(ctx context.Context) (res ProductList, err error) {
 func setupTestServer(t *testing.T) (*strut.Strut, *chi.Mux, *httptest.Server) {
 	r := chi.NewRouter()
 
-	// Add custom error handler for 404 errors - MUST be added before routes
-	//r.Use(func(next http.Handler) http.Handler {
-	//	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	//		defer func() {
-	//			if err := recover(); err != nil {
-	//				if httpErr, ok := err.(strut.Error); ok {
-	//					w.Header().Set("Content-Type", "application/json")
-	//					w.WriteHeader(httpErr.StatusCode)
-	//					json.NewEncoder(w).Encode(ErrorResponse{
-	//						Error:   httpErr.Error(),
-	//						Code:    httpErr.StatusCode,
-	//						Details: httpErr.Details,
-	//					})
-	//					return
-	//				}
-	//				// Re-panic for other errors
-	//				panic(err)
-	//			}
-	//		}()
-	//		next.ServeHTTP(w, r)
-	//	})
-	//})
-
 	s := strut.New(slog.Default(), r).
 		Title("Product API").
 		Description("API for managing products").
@@ -188,7 +164,7 @@ func setupTestServer(t *testing.T) (*strut.Strut, *chi.Mux, *httptest.Server) {
 		with.Tags("products"),
 		with.PathParam[string]("id", "Product ID"),
 		with.ResponseDescription(200, "Product details"),
-		with.Response(404, swag.ResponseOf[strut.Error]("Product not found")),
+		with.Response(404, strut.ResponseOf[strut.Error]("Product not found")),
 	)
 
 	strut.Post(s, "/products", CreateProduct,
@@ -198,7 +174,7 @@ func setupTestServer(t *testing.T) (*strut.Strut, *chi.Mux, *httptest.Server) {
 		with.Tags("products"),
 		with.RequestDescription("Product to create"),
 		with.ResponseDescription(200, "Created product"),
-		with.Response(400, swag.ResponseOf[strut.Error]("Invalid product data")),
+		with.Response(400, strut.ResponseOf[strut.Error]("Invalid product data")),
 	)
 
 	strut.Get(s, "/products/search", SearchProducts,
