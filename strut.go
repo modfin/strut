@@ -13,16 +13,16 @@ import (
 	"reflect"
 )
 
-type Mux interface {
-	Post(path string, handler http.HandlerFunc)
-	Get(path string, handler http.HandlerFunc)
-	Put(path string, handler http.HandlerFunc)
-	Delete(path string, handler http.HandlerFunc)
-}
+//type Mux interface {
+//	Post(path string, handler http.HandlerFunc)
+//	Get(path string, handler http.HandlerFunc)
+//	Put(path string, handler http.HandlerFunc)
+//	Delete(path string, handler http.HandlerFunc)
+//}
 
 type Strut struct {
 	Definition *Definition
-	mux        Mux
+	mux        *chi.Mux
 	log        *slog.Logger
 }
 
@@ -68,7 +68,7 @@ func (s *Strut) SchemaHandlerJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func New(log *slog.Logger, mux Mux) *Strut {
+func New(log *slog.Logger, mux *chi.Mux) *Strut {
 
 	return &Strut{
 		log: log,
