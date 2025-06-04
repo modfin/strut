@@ -1,4 +1,4 @@
-package strut
+package swag
 
 import "github.com/modfin/strut/schema"
 
@@ -33,14 +33,14 @@ type Path struct {
 
 // Operation represents an HTTP operation on a path
 type Operation struct {
-	Tags        []string             `json:"tags,omitempty" yaml:"tags,omitempty"`
-	Summary     string               `json:"summary,omitempty" yaml:"summary,omitempty"`
-	Description string               `json:"description,omitempty" yaml:"description,omitempty"`
-	OperationID string               `json:"operationId,omitempty" yaml:"operationId,omitempty"`
-	Parameters  []Param              `json:"parameters,omitempty" yaml:"parameters,omitempty"`
-	RequestBody *RequestBody         `json:"requestBody,omitempty" yaml:"requestBody,omitempty"`
-	Responses   map[string]*Response `json:"responses,omitempty" yaml:"responses,omitempty"`
-	Deprecated  bool                 `json:"deprecated,omitempty" yaml:"deprecated,omitempty"`
+	Tags        []string               `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Summary     string                 `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Description string                 `json:"description,omitempty" yaml:"description,omitempty"`
+	OperationID string                 `json:"operationId,omitempty" yaml:"operationId,omitempty"`
+	Parameters  []Param                `json:"parameters,omitempty" yaml:"parameters,omitempty"`
+	RequestBody *RequestBody           `json:"requestBody,omitempty" yaml:"requestBody,omitempty"`
+	Responses   map[string]*OpResponse `json:"responses,omitempty" yaml:"responses,omitempty"`
+	Deprecated  bool                   `json:"deprecated,omitempty" yaml:"deprecated,omitempty"`
 }
 
 // Param represents a parameter for an operation
@@ -61,17 +61,17 @@ type RequestBody struct {
 	Content     map[string]MediaType `json:"content,omitempty" yaml:"content,omitempty"`
 }
 
-// Response represents a response from an API operation
-type Response struct {
+// OpResponse represents a response from an API operation
+type OpResponse struct {
 	Description string               `json:"description,omitempty" yaml:"description,omitempty"`
 	Content     map[string]MediaType `json:"content,omitempty" yaml:"content,omitempty"`
 	//Headers     map[string]Header    `json:"headers,omitempty" yaml:"headers,omitempty"`
 	//Links       map[string]Link      `json:"links,omitempty" yaml:"links,omitempty"`
 }
 
-func ResponseOf[T any](description string) *Response {
+func ResponseOf[T any](description string) *OpResponse {
 	var z T
-	return &Response{
+	return &OpResponse{
 		Description: description,
 		Content: map[string]MediaType{
 			"application/json": {
@@ -135,7 +135,7 @@ type SecurityRequirement map[string][]string
 type Components struct {
 	//SecuritySchemes map[string]SecurityScheme `json:"securitySchemes" yaml:"securitySchemes"`
 	Schemas map[string]*schema.JSON `json:"schemas,omitempty" yaml:"schemas,omitempty"`
-	//Responses  map[string]Response     `json:"responses" yaml:"responses"`
+	//Responses  map[string]OpResponse     `json:"responses" yaml:"responses"`
 	//Parameters map[string]Param        `json:"parameters" yaml:"parameters"`
 	//Examples   map[string]Example      `json:"examples" yaml:"examples"`
 }
