@@ -154,7 +154,7 @@ func getPath(d *swag.Definition, path string) *swag.Path {
 	return d.Paths[path]
 }
 
-func createResponse(s *Strut, ctx context.Context, responder Responder[any]) {
+func createResponse(s *Strut, ctx context.Context, responder Response[any]) {
 	w, r := HTTPResponseWriter(ctx), HTTPRequest(ctx)
 	err := responder.Respond(w, r)
 	if err != nil {
@@ -164,10 +164,10 @@ func createResponse(s *Strut, ctx context.Context, responder Responder[any]) {
 }
 
 // HandlerOut Handler for a GET and DELETE request
-type HandlerOut[RES any] func(ctx context.Context) Responder[RES]
+type HandlerOut[RES any] func(ctx context.Context) Response[RES]
 
 // HandlerInOut Handler for a POST and PUT request
-type HandlerInOut[REQ any, RES any] func(ctx context.Context, req REQ) Responder[RES]
+type HandlerInOut[REQ any, RES any] func(ctx context.Context, req REQ) Response[RES]
 
 func Post[REQ any, RES any](s *Strut, path string, handler HandlerInOut[REQ, RES], ops ...OpConfig) {
 

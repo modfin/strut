@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-type Responder[T any] interface {
+type Response[T any] interface {
 	Respond(w http.ResponseWriter, r *http.Request) error
 }
 type responseHandler[T any] struct {
@@ -18,7 +18,7 @@ func (r *responseHandler[T]) Respond(wri http.ResponseWriter, req *http.Request)
 	return r.handler(wri, req)
 }
 
-func RespondWith[T any](status int, response any) Responder[T] {
+func Respond[T any](status int, response any) Response[T] {
 	return &responseHandler[T]{
 		handler: func(w http.ResponseWriter, r *http.Request) error {
 			w.Header().Set("Content-Type", "application/json")
@@ -33,15 +33,15 @@ type Error struct {
 	Error      string `json:"error" json-description:"Error message"`
 }
 
-func Respond[T any](response T) Responder[T] {
-	return RespondWith[T](http.StatusOK, response)
+func RespondOk[T any](response T) Response[T] {
+	return Respond[T](http.StatusOK, response)
 }
 
-func RespondError[T any](statusCode int, message string) Responder[T] {
-	return RespondWith[T](statusCode, Error{StatusCode: statusCode, Error: message})
+func RespondError[T any](statusCode int, message string) Response[T] {
+	return Respond[T](statusCode, Error{StatusCode: statusCode, Error: message})
 }
 
-func RespondFunc[T any](handler func(w http.ResponseWriter, r *http.Request) error) Responder[T] {
+func RespondFunc[T any](handler func(w http.ResponseWriter, r *http.Request) error) Response[T] {
 	return &responseHandler[T]{
 		handler: handler,
 	}

@@ -19,17 +19,19 @@ type Person struct {
 	Name string `in:"body" json:"name" json-description:"User's name"`
 }
 
-func GetPerson(ctx context.Context) strut.Responder[Person] {
+func GetPerson(ctx context.Context) strut.Response[Person] {
 	nn := strut.PathParam(ctx, "name")
 	if nn == "" {
 		return strut.RespondError[any](http.StatusBadRequest, "name is required")
 	}
 	person := Person{Name: nn}
-	return strut.Respond(person)
+	return strut.RespondOk(person)
 }
 
-func GetTeapot(ctx context.Context) strut.Responder[Person] {
+func GetTeapot(ctx context.Context) strut.Response[Person] {
 	nn := strut.PathParam(ctx, "name")
+
+	// RespondError allows you to return an error response, {"error": "im a teapot", "status_code": 418}
 	return strut.RespondError[any](http.StatusTeapot, "im a teapot, "+nn)
 }
 
@@ -39,11 +41,13 @@ type CustomData struct {
 	Data   string `json:"data" json-description:"Data"`
 }
 
-func GetCustom(ctx context.Context) strut.Responder[CustomData] {
+func GetCustom(ctx context.Context) strut.Response[CustomData] {
 
 	w := strut.HTTPResponseWriter(ctx)
 	w.Header().Set("X-Custom", "custom")
 
+	// RespondFunc allows you to return a custom http response,
+	// which can be used for binary data or custom structs for different responses codes or such
 	return strut.RespondFunc[any](func(w http.ResponseWriter, r *http.Request) error {
 		return json.NewEncoder(w).Encode(CustomData{
 			Im:     "I'm",
@@ -188,155 +192,3 @@ func TestFrom_SimpleGetCustom(t *testing.T) {
 	assert.Equal(t, resp.Header.Get("x-custom"), "custom")
 
 }
-
-//
-//func ImATeapot(ctx context.Context) (res Person, err error) {
-//
-//	return strut.NewError[Person](ctx, http.StatusTeapot, "im a teapot")
-//}
-//
-//func StartServer(t *testing.T) *http.Server {
-//	r := chi.NewRouter()
-//
-//	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-//		w.Write([]byte("pong"))
-//	})
-//
-//	s := strut.New(slog.Default(), r).
-//		Title("A Strut API, openapi for agents").
-//		Description("A Strut API, openapi for agents implementing demo endpoints").
-//		Version("1.0.0").
-//		AddServer("http://localhost:8080", "The main server")
-//
-//	strut.Post(s, "/add-age", SetAge,
-//		with.OperationId("add-age"),
-//		with.Description("Adds a random age to the user"),
-//		with.Tags("users", "user-age"),
-//
-//		// Query params
-//		with.QueryParam[int]("age", "User's age"),
-//
-//		with.RequestDescription("User to add age to"),
-//		// Since generics is used. The description of the
-//		with.ResponseDescription(200, "User with added age"),
-//	)
-//
-//	strut.Get(s, "/person/{name}", GetPerson,
-//		with.OperationId("get-person"),
-//		with.Description("Get a person by name"),
-//		// Query params
-//		with.PathParam[string]("name", "User's name"),
-//
-//		with.ResponseDescription(200, "A person"),
-//	)
-//
-//	strut.Get(s, "/im-a-teapot", ImATeapot,
-//		with.OperationId("im-a-teapot"),
-//		with.Description("Get a teapot person"),
-//		with.ResponseDescription(200, "A person"),
-//		with.Response(418, strut.ResponseOf[strut.Error]("im a teapot error")),
-//	)
-//
-//	r.Get("/.well-known/openapi.yaml", s.SchemaHandlerYAML)
-//	r.Get("/.well-known/openapi.json", s.SchemaHandlerJSON)
-//
-//	ss := &http.Server{
-//		Addr:    ":8080",
-//		Handler: r,
-//	}
-//
-//	go func() {
-//		ss.ListenAndServe()
-//	}()
-//
-//	// wait until endpoint is alive
-//	endpoint := "http://localhost:8080/ping"
-//	start := time.Now()
-//	for time.Since(start) < time.Second {
-//		resp, err := http.Get(endpoint)
-//		if err == nil && resp.StatusCode == http.StatusOK {
-//			return ss
-//		}
-//		time.Sleep(10 * time.Millisecond)
-//	}
-//	t.Fatalf("endpoint %s is not alive after 1 second", endpoint)
-//
-//	return ss
-//}
-
-//
-//func TestFrom_Simple(t *testing.T) {
-//	ss := StartServer(t)
-//	defer func() {
-//		cc, cancel := context.WithTimeout(context.Background(), time.Second)
-//		ss.Shutdown(cc)
-//		cancel()
-//	}()
-//
-//	for i := 0; i < 100; i++ {
-//		resp, err := http.Post("http://localhost:8080/add-age", "application/json", bytes.NewBuffer([]byte(`{"name": "John Doe"}`)))
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//
-//		var result PersonWithAge
-//		err = json.NewDecoder(resp.Body).Decode(&result)
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//		resp.Body.Close()
-//
-//		assert.Equal(t, "John Doe", result.Name)
-//		assert.NotEqual(t, 0, result.Age)
-//	}
-//
-//}
-//
-//func TestFrom_Fixed(t *testing.T) {
-//	ss := StartServer(t)
-//	defer func() {
-//		cc, cancel := context.WithTimeout(context.Background(), time.Second)
-//		ss.Shutdown(cc)
-//		cancel()
-//	}()
-//
-//	for i := 0; i < 10; i++ {
-//		resp, err := http.Post("http://localhost:8080/add-age?age=17", "application/json", bytes.NewBuffer([]byte(`{"name": "John Doe"}`)))
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//
-//		var result PersonWithAge
-//		err = json.NewDecoder(resp.Body).Decode(&result)
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//		resp.Body.Close()
-//
-//		assert.Equal(t, "John Doe", result.Name)
-//		assert.Equal(t, 17, result.Age)
-//	}
-//
-//}
-//
-//func TestFrom_spec_yaml(t *testing.T) {
-//	ss := StartServer(t)
-//	defer func() {
-//		cc, cancel := context.WithTimeout(context.Background(), time.Second)
-//		ss.Shutdown(cc)
-//		cancel()
-//	}()
-//
-//	y, err := http.Get("http://localhost:8080/.well-known/openapi.yaml")
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	//text, err := io.ReadAll(y.Body)
-//	_, err = io.ReadAll(y.Body)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	//fmt.Println(string(text))
-//
-//}
