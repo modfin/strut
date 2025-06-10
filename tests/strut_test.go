@@ -1,4 +1,4 @@
-package strut_test
+package tests
 
 import (
 	"context"
@@ -458,4 +458,90 @@ func TestStrut_ContextHelpers(t *testing.T) {
 	assert.Contains(t, result.Echo, "Hola, World")
 	assert.Contains(t, result.Echo, "TestClient")
 	assert.NotEmpty(t, result.Time)
+}
+
+// TestOpenAPISchemaJSON tests that the OpenAPI schema exposed at /.well-known/openapi.json
+// is valid and contains the expected structure.
+func TestOpenAPISchemaJSON(t *testing.T) {
+	// Create a new router and Strut instance
+	r := chi.NewRouter()
+	s := strut.New(slog.Default(), r)
+
+	// Configure the API metadata
+	s.Title("Test OpenAPI Schema")
+	s.Description("API for testing OpenAPI schema generation")
+	s.Version("1.0.0")
+	s.AddServer("https://api.example.com", "Production server")
+
+	// Add a sample endpoint to verify it appears in the schema
+	strut.Get(s, "/test/endpoint", func(ctx context.Context) strut.Response[TestResponse] {
+		return strut.RespondOk(TestResponse{
+			Echo: "Test endpoint",
+			Time: time.Now().Format(time.RFC3339),
+		})
+	},
+		with.OperationId("test-endpoint"),
+		with.Description("Test endpoint for schema validation"),
+		with.ResponseDescription(200, "Test response"),
+	)
+
+	// Register the schema handler
+	r.Get("/.well-known/openapi.json", s.SchemaHandlerJSON)
+
+	// Create a test server
+	server := httptest.NewServer(r)
+	defer server.Close()
+
+	// Make a request to the schema endpoint
+	resp, err := http.Get(server.URL + "/.well-known/openapi.json")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// Verify the response status and content type
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	// Parse the JSON to verify it's valid
+	var schema map[string]interface{}
+	err = json.Unmarshal(body, &schema)
+	require.NoError(t, err, "Schema should be valid JSON")
+
+	// Verify the basic OpenAPI structure
+	assert.Equal(t, "3.0.3", schema["openapi"], "Should have correct OpenAPI version")
+
+	// Verify the API metadata
+	info, ok := schema["info"].(map[string]interface{})
+	require.True(t, ok, "Schema should have info object")
+	assert.Equal(t, "Test OpenAPI Schema", info["title"], "Should have correct title")
+	assert.Equal(t, "API for testing OpenAPI schema generation", info["description"], "Should have correct description")
+	assert.Equal(t, "1.0.0", info["version"], "Should have correct version")
+
+	// Verify servers
+	servers, ok := schema["servers"].([]interface{})
+	require.True(t, ok, "Schema should have servers array")
+	require.NotEmpty(t, servers, "Schema should have at least one server")
+	server1 := servers[0].(map[string]interface{})
+	assert.Equal(t, "https://api.example.com", server1["url"], "Should have correct server URL")
+
+	// Verify paths
+	paths, ok := schema["paths"].(map[string]interface{})
+	require.True(t, ok, "Schema should have paths object")
+
+	// Verify the test endpoint exists in the schema
+	testPath, ok := paths["/test/endpoint"].(map[string]interface{})
+	require.True(t, ok, "Schema should include the test endpoint")
+
+	// Verify the GET operation for the test endpoint
+	getOp, ok := testPath["get"].(map[string]interface{})
+	require.True(t, ok, "Test endpoint should have GET operation")
+	assert.Equal(t, "test-endpoint", getOp["operationId"], "Should have correct operationId")
+	assert.Equal(t, "Test endpoint for schema validation", getOp["description"], "Should have correct description")
+
+	// Verify components section exists
+	_, ok = schema["components"].(map[string]interface{})
+	require.True(t, ok, "Schema should have components object")
 }

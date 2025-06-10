@@ -1,4 +1,4 @@
-package strut_test
+package tests
 
 import (
 	"context"
