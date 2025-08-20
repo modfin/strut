@@ -202,6 +202,146 @@ strut.Get(s, "/people/search", SearchPeople,
 )
 ```
 
+## Middleware and Groups
+
+Strut provides powerful middleware and grouping capabilities that allow you to organize your API endpoints and apply cross-cutting concerns like authentication, logging, and CORS handling.
+
+### Global Middleware
+
+You can apply middleware to all endpoints in your API using the `Use()` method:
+
+```go
+func main() {
+	r := chi.NewRouter()
+	s := strut.New(slog.Default(), r)
+
+	// Add global middleware that applies to all endpoints
+	s.Use(loggingMiddleware(slog.Default()))
+
+	// All endpoints registered after this will have the middleware applied
+	strut.Get(s, "/users", GetUsers, with.OperationId("get-users"))
+	strut.Post(s, "/users", CreateUser, with.OperationId("create-user"))
+}
+
+// Example middleware functions
+func loggingMiddleware(log *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			next.ServeHTTP(w, r)
+			log.Info("Request", "method", r.Method, "path", r.URL.Path, "duration", time.Since(start))
+		})
+	}
+}
+
+```
+
+### Groups and Group-Specific Middleware
+
+Groups allow you to organize related endpoints and apply middleware only to specific sets of routes. This is particularly useful for creating protected areas of your API:
+
+```go
+func main() {
+	r := chi.NewRouter()
+	s := strut.New(slog.Default(), r)
+
+	// Add global middleware
+	s.Use(loggingMiddleware())
+
+	// Public endpoints (no authentication required)
+	strut.Get(s, "/health", HealthCheck, with.OperationId("health-check"))
+	strut.Get(s, "/version", GetVersion, with.OperationId("get-version"))
+
+	// Protected API group
+	s.Group(func(api *strut.Strut) {
+		// Add authentication middleware only to this group
+		api.Use(authenticationMiddleware())
+		api.Use(rateLimitMiddleware())
+
+		// All endpoints in this group require authentication
+		strut.Get(api, "/users", GetUsers, with.OperationId("get-users"))
+		strut.Post(api, "/users", CreateUser, with.OperationId("create-user"))
+		strut.Get(api, "/users/{id}", GetUser, with.OperationId("get-user"))
+		strut.Put(api, "/users/{id}", UpdateUser, with.OperationId("update-user"))
+		strut.Delete(api, "/users/{id}", DeleteUser, with.OperationId("delete-user"))
+	})
+
+	// Admin-only group with additional middleware
+	s.Group(func(admin *strut.Strut) {
+		admin.Use(adminAuthenticationMiddleware())
+		admin.Use(auditLogMiddleware())
+
+		strut.Get(admin, "/admin/stats", GetStats, with.OperationId("get-stats"))
+		strut.Post(admin, "/admin/users/{id}/ban", BanUser, with.OperationId("ban-user"))
+	})
+}
+```
+
+
+### Middleware Execution Order
+
+Middleware executes in the order it's added:
+
+1. **Global middleware** (added with `s.Use()`) executes first
+2. **Group middleware** (added with `group.Use()`) executes after global middleware
+3. **Nested group middleware** executes in nesting order (parent to child)
+
+```go
+s.Use(middleware1()) // Executes 1st
+s.Use(middleware2()) // Executes 2nd
+
+s.Group(func(group1 *strut.Strut) {
+	group1.Use(middleware3()) // Executes 3rd
+	group1.Use(middleware4()) // Executes 4th
+	
+	group1.Group(func(group2 *strut.Strut) {
+		group2.Use(middleware5()) // Executes 5th
+		
+		// Endpoint here will have all 5 middleware layers applied
+		strut.Get(group2, "/nested", Handler, with.OperationId("nested"))
+	})
+})
+```
+
+
+### Single Endpoint Middleware
+
+For cases where you need to apply middleware to just one specific endpoint, you can use the `With()` method. This is useful when you have special requirements for individual endpoints without affecting others:
+
+```go
+func main() {
+	r := chi.NewRouter()
+	s := strut.New(slog.Default(), r)
+
+	// Global middleware applied to all endpoints
+	s.Use(loggingMiddleware())
+
+	// Regular endpoint without additional middleware
+	strut.Get(s, "/public", PublicHandler, with.OperationId("public"))
+
+	// Endpoint with additional middleware applied only to this route
+	strut.Get(s.With(rateLimitMiddleware()), 
+		"/limited", LimitedHandler, with.OperationId("limited"))
+
+	// Another endpoint with different specific middleware
+	strut.Post(s.With(validationMiddleware(), cacheMiddleware()), 
+		"/validated", ValidatedHandler, with.OperationId("validated"))
+}
+```
+
+The `With()` method can be chained to apply multiple middleware layers to a single endpoint, and these middleware layers execute in addition to any global middleware that's already configured.
+
+### Benefits for LLM Agents
+
+The middleware and grouping system provides several benefits for LLM agents:
+
+1. **Consistent Authentication**: LLM agents can understand that certain endpoint groups require authentication tokens
+2. **Clear API Organization**: Grouped endpoints help LLMs understand the logical organization of your API
+3. **Predictable Error Responses**: Middleware can provide consistent error responses that LLMs can learn to handle
+4. **Rate Limiting Awareness**: LLMs can understand and respect rate limits applied through middleware
+
+When documenting your API for LLM consumption, consider mentioning which endpoint groups require authentication and what the expected error responses are for middleware-related failures.
+
 ## Schema and LLM-Friendly Descriptions
 
 Strut uses the `schema` package to automatically generate OpenAPI documentation from your Go structs. This is particularly important for LLM agents, as it allows them to understand the purpose and constraints of each field in your API.

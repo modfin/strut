@@ -4,17 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/modfin/strut/schema"
-	"github.com/modfin/strut/swag"
-	"gopkg.in/yaml.v3"
 	"log/slog"
 	"net/http"
 	"path/filepath"
 	"reflect"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/modfin/strut/schema"
+	"github.com/modfin/strut/swag"
+	"gopkg.in/yaml.v3"
 )
 
-func New(log *slog.Logger, mux *chi.Mux) *Strut {
+func New(log *slog.Logger, mux chi.Router) *Strut {
 
 	return &Strut{
 		log: log,
@@ -36,8 +37,37 @@ func New(log *slog.Logger, mux *chi.Mux) *Strut {
 
 type Strut struct {
 	Definition *swag.Definition
-	mux        *chi.Mux
+	mux        chi.Router
 	log        *slog.Logger
+	middleware []func(http.Handler) http.Handler
+}
+
+func (s *Strut) clone() *Strut {
+	return &Strut{
+		Definition: s.Definition,
+		mux:        s.mux,
+		log:        s.log,
+		middleware: append([]func(http.Handler) http.Handler(nil), s.middleware...),
+	}
+}
+
+func (s *Strut) Use(middlewares ...func(http.Handler) http.Handler) {
+	s.middleware = append(s.middleware, middlewares...)
+}
+
+func (s *Strut) Group(fn func(s *Strut)) {
+	ss := s.clone()
+	s.mux.Group(func(r chi.Router) {
+		ss.mux = r
+		fn(ss)
+	})
+}
+
+func (s *Strut) With(middleware ...func(http.Handler) http.Handler) *Strut {
+	ss := s.clone()
+	ss.mux = ss.mux.With()
+	ss.middleware = append(ss.middleware, middleware...)
+	return ss
 }
 
 func (s *Strut) AddServer(url string, description string) *Strut {
@@ -176,7 +206,7 @@ func Post[REQ any, RES any](s *Strut, path string, handler HandlerInOut[REQ, RES
 	assignRequest[REQ](s, op)
 	assignResponse[RES](s, op)
 
-	s.mux.Post(path, func(w http.ResponseWriter, r *http.Request) {
+	s.mux.With(s.middleware...).Post(path, func(w http.ResponseWriter, r *http.Request) {
 		ctx := decorateContext(r, w)
 
 		var req REQ
@@ -200,7 +230,7 @@ func Get[RES any](s *Strut, path string, handler HandlerOut[RES], ops ...OpConfi
 	getPath(s.Definition, path).Get = op
 	assignResponse[RES](s, op)
 
-	s.mux.Get(path, func(w http.ResponseWriter, r *http.Request) {
+	s.mux.With(s.middleware...).Get(path, func(w http.ResponseWriter, r *http.Request) {
 		ctx := decorateContext(r, w)
 
 		res := handler(ctx)
@@ -216,7 +246,7 @@ func Put[REQ any, RES any](s *Strut, path string, handler HandlerInOut[REQ, RES]
 	assignRequest[REQ](s, op)
 	assignResponse[RES](s, op)
 
-	s.mux.Put(path, func(w http.ResponseWriter, r *http.Request) {
+	s.mux.With(s.middleware...).Put(path, func(w http.ResponseWriter, r *http.Request) {
 		ctx := decorateContext(r, w)
 
 		var req REQ
@@ -234,15 +264,59 @@ func Put[REQ any, RES any](s *Strut, path string, handler HandlerInOut[REQ, RES]
 }
 
 func Delete[RES any](s *Strut, path string, handler HandlerOut[RES], ops ...OpConfig) {
-
 	op := assignOperation(ops...)
 	getPath(s.Definition, path).Delete = op
 	assignResponse[RES](s, op)
 
-	s.mux.Delete(path, func(w http.ResponseWriter, r *http.Request) {
+	s.mux.With(s.middleware...).Delete(path, func(w http.ResponseWriter, r *http.Request) {
 		ctx := decorateContext(r, w)
 
 		res := handler(ctx)
 		createResponse(s, ctx, res)
+	})
+}
+
+func RawPost[REQ any, RES any](s *Strut, path string, handler http.HandlerFunc, ops ...OpConfig) {
+	op := assignOperation(ops...)
+	getPath(s.Definition, path).Post = op
+	assignRequest[REQ](s, op)
+	assignResponse[RES](s, op)
+
+	s.mux.With(s.middleware...).Post(path, func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(decorateContext(r, w))
+		handler(w, r)
+	})
+}
+func RawPut[REQ any, RES any](s *Strut, path string, handler http.HandlerFunc, ops ...OpConfig) {
+	op := assignOperation(ops...)
+	getPath(s.Definition, path).Post = op
+	assignRequest[REQ](s, op)
+	assignResponse[RES](s, op)
+
+	s.mux.With(s.middleware...).Put(path, func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(decorateContext(r, w))
+		handler(w, r)
+	})
+}
+func RawGet[RES any](s *Strut, path string, handler http.HandlerFunc, ops ...OpConfig) {
+	op := assignOperation(ops...)
+	getPath(s.Definition, path).Get = op
+	assignResponse[RES](s, op)
+
+	s.mux.With(s.middleware...).Get(path, func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(decorateContext(r, w))
+		handler(w, r)
+
+	})
+}
+func RawDelete[RES any](s *Strut, path string, handler http.HandlerFunc, ops ...OpConfig) {
+	op := assignOperation(ops...)
+	getPath(s.Definition, path).Get = op
+	assignResponse[RES](s, op)
+
+	s.mux.With(s.middleware...).Get(path, func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(decorateContext(r, w))
+		handler(w, r)
+
 	})
 }

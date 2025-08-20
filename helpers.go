@@ -3,8 +3,9 @@ package strut
 import (
 	"context"
 	"encoding/json"
-	"github.com/go-chi/chi/v5"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type Response[T any] interface {
