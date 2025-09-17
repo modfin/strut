@@ -289,7 +289,7 @@ func RawPost[REQ any, RES any](s *Strut, path string, handler http.HandlerFunc, 
 }
 func RawPut[REQ any, RES any](s *Strut, path string, handler http.HandlerFunc, ops ...OpConfig) {
 	op := assignOperation(ops...)
-	getPath(s.Definition, path).Post = op
+	getPath(s.Definition, path).Put = op
 	assignRequest[REQ](s, op)
 	assignResponse[RES](s, op)
 
@@ -311,10 +311,10 @@ func RawGet[RES any](s *Strut, path string, handler http.HandlerFunc, ops ...OpC
 }
 func RawDelete[RES any](s *Strut, path string, handler http.HandlerFunc, ops ...OpConfig) {
 	op := assignOperation(ops...)
-	getPath(s.Definition, path).Get = op
+	getPath(s.Definition, path).Delete = op
 	assignResponse[RES](s, op)
 
-	s.mux.With(s.middleware...).Get(path, func(w http.ResponseWriter, r *http.Request) {
+	s.mux.With(s.middleware...).Delete(path, func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(decorateContext(r, w))
 		handler(w, r)
 
