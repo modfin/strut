@@ -1,6 +1,7 @@
 package strut
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -207,10 +208,20 @@ func Post[REQ any, RES any](s *Strut, path string, handler HandlerInOut[REQ, RES
 	assignResponse[RES](s, op)
 
 	s.mux.With(s.middleware...).Post(path, func(w http.ResponseWriter, r *http.Request) {
+		var err error
 		ctx := decorateContext(r, w)
+		reader := r.Body
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			reader, err = gzip.NewReader(r.Body)
+			if err != nil {
+				s.log.Error("error decoding gzip", "error", err)
+				http.Error(w, "could not decode request", http.StatusBadRequest)
+				return
+			}
+		}
 
 		var req REQ
-		err := json.NewDecoder(r.Body).Decode(&req)
+		err = json.NewDecoder(reader).Decode(&req)
 		if err != nil {
 			s.log.Error("error decoding request", "error", err)
 			http.Error(w, "could not decode request", http.StatusBadRequest)
@@ -247,10 +258,20 @@ func Put[REQ any, RES any](s *Strut, path string, handler HandlerInOut[REQ, RES]
 	assignResponse[RES](s, op)
 
 	s.mux.With(s.middleware...).Put(path, func(w http.ResponseWriter, r *http.Request) {
+		var err error
 		ctx := decorateContext(r, w)
+		reader := r.Body
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			reader, err = gzip.NewReader(r.Body)
+			if err != nil {
+				s.log.Error("error decoding gzip", "error", err)
+				http.Error(w, "could not decode request", http.StatusBadRequest)
+				return
+			}
+		}
 
 		var req REQ
-		err := json.NewDecoder(r.Body).Decode(&req)
+		err = json.NewDecoder(reader).Decode(&req)
 		if err != nil {
 
 			s.log.Error("error decoding request", "error", err)
